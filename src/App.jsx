@@ -232,6 +232,7 @@ export default function App() {
   const [confirmModal, setConfirmModal] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [splitMode, setSplitMode] = useState('income'); // 'income' | 'equal'
 
   // Chargement initial
   useEffect(() => {
@@ -264,7 +265,8 @@ export default function App() {
     0
   );
   const totalIncome = (parseFloat(currentData.person1.income) || 0) + (parseFloat(currentData.person2.income) || 0);
-  const p1Pct = totalIncome > 0 ? ((parseFloat(currentData.person1.income) || 0) / totalIncome) * 100 : 50;
+  const p1PctIncome = totalIncome > 0 ? ((parseFloat(currentData.person1.income) || 0) / totalIncome) * 100 : 50;
+  const p1Pct = splitMode === 'equal' ? 50 : p1PctIncome;
   const p2Pct = 100 - p1Pct;
   const p1Share = (totalExpenses * p1Pct) / 100;
   const p2Share = (totalExpenses * p2Pct) / 100;
@@ -354,14 +356,7 @@ export default function App() {
         const [year, month] = currentData.month.split('-');
         const next = new Date(parseInt(year), parseInt(month)); // month is already 0-indexed after +1 — wraps correctly
         const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
-        setCurrentData((d) => ({
-          ...d,
-          month: nextStr,
-          categories: d.categories.map((c) => ({
-            ...c,
-            items: c.items.map((it) => ({ ...it, amount: 0 })),
-          })),
-        }));
+        setCurrentData((d) => ({ ...d, month: nextStr }));
         setConfirmModal(null);
         showSuccess('Mois archivé avec succès !');
       },
@@ -646,6 +641,16 @@ export default function App() {
             <div className="text-center">
               <p className="text-xs text-gray-500 font-medium">Total charges</p>
               <p className="text-2xl font-bold text-gray-800">{fmt(totalExpenses)} €</p>
+              <button
+                onClick={() => setSplitMode((m) => m === 'income' ? 'equal' : 'income')}
+                className={`mt-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                  splitMode === 'equal'
+                    ? 'bg-violet-100 text-violet-700 hover:bg-violet-200'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                {splitMode === 'equal' ? '50/50 ✓' : 'Revenus'}
+              </button>
             </div>
             {/* Personne 1 */}
             <div className="text-center border-l border-r border-gray-100 px-2">
