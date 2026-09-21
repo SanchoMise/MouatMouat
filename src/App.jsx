@@ -381,7 +381,7 @@ export default function App() {
   const p1Pct = splitMode === 'equal' ? 50 : p1PctIncome;
   const p2Pct = 100 - p1Pct;
   const ccfDues = { person1: (ccfTotal * p1Pct) / 100, person2: (ccfTotal * p2Pct) / 100 };
-  const helloDues = { person1: (helloTotal * p1Pct) / 100, person2: (helloTotal * p2Pct) / 100 };
+  const helloDues = { person1: helloTotal / 2, person2: helloTotal / 2 }; // HelloBank : toujours 50/50
 
   // ── Handlers ──
   const updateIncome = (person, value) => {
@@ -646,7 +646,7 @@ export default function App() {
                       : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                   }`}
                 >
-                  {splitMode === 'equal' ? '50/50 ✓' : 'Selon revenus'}
+                  {splitMode === 'equal' ? 'CCF 50/50 ✓' : 'CCF selon revenus'}
                 </button>
                 <button
                   onClick={() => setEditingIncome((v) => !v)}
