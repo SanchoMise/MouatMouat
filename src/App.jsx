@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Edit2, Save, Calendar, X, DollarSign } from 'lucide-react';
 
-const DEFAULT_MONTH = new Date().toISOString().slice(0, 7);
+// À partir du 15, on travaille sur le mois suivant (prélèvement le 5 du mois suivant)
+const getActiveMonth = (now = new Date()) => {
+  const d = new Date(now.getFullYear(), now.getMonth() + (now.getDate() >= 15 ? 1 : 0), 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const DEFAULT_MONTH = getActiveMonth();
 
 const DEFAULT_CATEGORIES = [
   {
@@ -441,7 +447,14 @@ export default function App() {
         loadData('expenses-exceptional'),
         loadData('expenses-payments'),
       ]);
-      if (cur) setCurrentData({ ...cur, helloBank: cur.helloBank || { amount: DEFAULT_HELLO_AMOUNT } });
+      if (cur) {
+        const active = getActiveMonth();
+        setCurrentData({
+          ...cur,
+          month: cur.month < active ? active : cur.month,
+          helloBank: cur.helloBank || { amount: DEFAULT_HELLO_AMOUNT },
+        });
+      }
       if (pay) {
         setPayments(pay);
       } else {
