@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Edit2, Save, Calendar, X, Home, Wallet } from 'lucide-react';
+import { Plus, Trash2, Calendar, X, Home, Wallet } from 'lucide-react';
 
 // À partir du 15, on travaille sur le mois suivant (prélèvement le 5 du mois suivant)
 const getActiveMonth = (now = new Date()) => {
@@ -134,6 +134,25 @@ function ConfirmModal({ title, message, onConfirm, onCancel, confirmLabel = 'Con
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Choix de répartition : selon revenus / 50/50 ──
+function SplitToggle({ value, onChange }) {
+  return (
+    <div className="inline-flex rounded-full bg-gray-100 p-0.5 text-xs font-medium">
+      {[['income', 'Selon revenus'], ['equal', '50/50']].map(([id, label]) => (
+        <button
+          key={id}
+          onClick={() => onChange(id)}
+          className={`px-2.5 py-1 rounded-full transition-colors ${
+            value === id ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -311,11 +330,9 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState('home');
-  const [editingIncome, setEditingIncome] = useState(false);
   const [confirmModal, setConfirmModal] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [splitMode, setSplitMode] = useState('income'); // 'income' | 'equal'
   const [payments, setPayments] = useState({}); // { 'YYYY-MM': { ccf|hello: { person1|person2: {amount, date} } } }
 
   // Chargement initial
@@ -371,25 +388,37 @@ export default function App() {
   };
 
   // ── Calculs ──
-  const ccfTotal = currentData.categories.reduce(
-    (sum, cat) => sum + cat.items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0),
-    0
-  );
-  const helloTotal = helloAmountOf(currentData);
   const totalIncome = (parseFloat(currentData.person1.income) || 0) + (parseFloat(currentData.person2.income) || 0);
-  const p1PctIncome = totalIncome > 0 ? ((parseFloat(currentData.person1.income) || 0) / totalIncome) * 100 : 50;
-  const p1Pct = splitMode === 'equal' ? 50 : p1PctIncome;
+  const p1Pct = totalIncome > 0 ? ((parseFloat(currentData.person1.income) || 0) / totalIncome) * 100 : 50;
   const p2Pct = 100 - p1Pct;
-  const ccfDues = { person1: (ccfTotal * p1Pct) / 100, person2: (ccfTotal * p2Pct) / 100 };
-  const helloDues = { person1: helloTotal / 2, person2: helloTotal / 2 }; // HelloBank : toujours 50/50
+  // Répartition d'un montant selon le mode : 'income' (selon revenus) ou 'equal' (50/50)
+  const splitAmount = (amount, mode) => {
+    const pct = mode === 'equal' ? 50 : p1Pct;
+    return { person1: (amount * pct) / 100, person2: (amount * (100 - pct)) / 100 };
+  };
+  const catTotalOf = (cat) => cat.items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
+  const ccfTotal = currentData.categories.reduce((sum, cat) => sum + catTotalOf(cat), 0);
+  const helloTotal = helloAmountOf(currentData);
+  const ccfDues = currentData.categories.reduce(
+    (acc, cat) => {
+      const part = splitAmount(catTotalOf(cat), cat.split || 'income');
+      return { person1: acc.person1 + part.person1, person2: acc.person2 + part.person2 };
+    },
+    { person1: 0, person2: 0 }
+  );
+  const helloDues = splitAmount(helloTotal, currentData.helloBank?.split || 'equal');
 
   // ── Handlers ──
   const updateIncome = (person, value) => {
     setCurrentData((d) => ({ ...d, [person]: { ...d[person], income: parseFloat(value) || 0 } }));
   };
 
-  const updateName = (person, value) => {
-    setCurrentData((d) => ({ ...d, [person]: { ...d[person], name: value } }));
+  const setCategorySplit = (catId, split) => {
+    setCurrentData((d) => ({ ...d, categories: d.categories.map((c) => (c.id === catId ? { ...c, split } : c)) }));
+  };
+
+  const setHelloSplit = (split) => {
+    setCurrentData((d) => ({ ...d, helloBank: { ...(d.helloBank || {}), split } }));
   };
 
   const updateItemName = (catId, itemId, value) => {
@@ -451,7 +480,7 @@ export default function App() {
     const newId = Date.now().toString();
     setCurrentData((d) => ({
       ...d,
-      categories: [...d.categories, { id: newId, name: newCategoryName.trim(), items: [] }],
+      categories: [...d.categories, { id: newId, name: newCategoryName.trim(), items: [], split: 'income' }],
     }));
     setNewCategoryName('');
   };
@@ -637,25 +666,6 @@ export default function App() {
                     className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                   />
                 </div>
-                <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setSplitMode((m) => (m === 'income' ? 'equal' : 'income'))}
-                  className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
-                    splitMode === 'equal'
-                      ? 'bg-violet-100 text-violet-700 hover:bg-violet-200'
-                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}
-                >
-                  {splitMode === 'equal' ? 'CCF 50/50 ✓' : 'CCF selon revenus'}
-                </button>
-                <button
-                  onClick={() => setEditingIncome((v) => !v)}
-                  className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800"
-                >
-                  {editingIncome ? <Save size={16} /> : <Edit2 size={16} />}
-                  {editingIncome ? 'Sauvegarder' : 'Modifier'}
-                </button>
-                </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {['person1', 'person2'].map((p) => {
@@ -663,16 +673,7 @@ export default function App() {
                   const pct = p === 'person1' ? p1Pct : p2Pct;
                   return (
                     <div key={p} className="border border-gray-200 rounded-lg p-4">
-                      {editingIncome ? (
-                        <input
-                          type="text"
-                          value={person.name}
-                          onChange={(e) => updateName(p, e.target.value)}
-                          className="w-full border-b border-indigo-300 text-lg font-semibold text-gray-700 mb-2 focus:outline-none focus:border-indigo-500 bg-transparent"
-                        />
-                      ) : (
-                        <p className="text-lg font-semibold text-gray-700 mb-2">{person.name}</p>
-                      )}
+                      <p className="text-lg font-semibold text-gray-700 mb-2">{person.name}</p>
                       <div className="flex items-center gap-2">
                         <input
                           type="number"
@@ -694,7 +695,7 @@ export default function App() {
 
             {/* Catégories */}
             {currentData.categories.map((cat) => {
-              const catTotal = cat.items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
+              const catTotal = catTotalOf(cat);
               return (
                 <div key={cat.id} className="bg-white rounded-lg shadow-lg p-5">
                   <div className="flex items-center justify-between mb-3">
@@ -702,6 +703,7 @@ export default function App() {
                       <h3 className="text-lg font-bold text-gray-800">{cat.name}</h3>
                       <p className="text-sm text-gray-400">{fmt(catTotal)} €</p>
                     </div>
+                    <SplitToggle value={cat.split || 'income'} onChange={(v) => setCategorySplit(cat.id, v)} />
                     <div className="flex gap-2">
                       <button
                         onClick={() => addItem(cat.id)}
@@ -757,7 +759,10 @@ export default function App() {
             {/* HelloBank */}
             <div className="bg-white rounded-lg shadow-lg p-5">
               <h3 className="text-lg font-bold text-gray-800">HelloBank</h3>
-              <p className="text-sm text-gray-400 mb-3">Dépenses courantes, réparties 50/50 (en général 1000 à 1200 €)</p>
+              <p className="text-sm text-gray-400 mb-3">Dépenses courantes (en général 1000 à 1200 €)</p>
+              <div className="mb-3">
+                <SplitToggle value={currentData.helloBank?.split || 'equal'} onChange={setHelloSplit} />
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
