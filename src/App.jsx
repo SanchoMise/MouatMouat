@@ -69,6 +69,11 @@ const buildSeedPayments = (bertrandKey, cyrielleKey) => {
   return out;
 };
 
+const BANKS = [['ccf', 'CCF'], ['hello', 'HelloBank']];
+const PERSONS = ['person1', 'person2'];
+const isMonthComplete = (payments, m) =>
+  BANKS.every(([b]) => PERSONS.every((k) => payments[m]?.[b]?.[k]));
+
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (d) => (d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR') : '');
 
@@ -474,6 +479,20 @@ export default function App() {
   useEffect(() => { if (loaded) saveData('expenses-exceptional', exceptionalHistory); }, [exceptionalHistory, loaded]);
   useEffect(() => { if (loaded) saveData('expenses-payments', payments); }, [payments, loaded]);
 
+  // Archivage automatique : un mois est archivé dès que CCF et HelloBank sont réglés par les deux
+  useEffect(() => {
+    if (!loaded) return;
+    setHistory((h) => {
+      const next = h.filter((e) => !e.auto || isMonthComplete(payments, e.month));
+      Object.keys(payments).filter((m) => isMonthComplete(payments, m)).forEach((m) => {
+        if (next.some((e) => e.month === m)) return;
+        const dates = BANKS.flatMap(([b]) => PERSONS.map((k) => payments[m][b][k].date)).sort();
+        next.push({ month: m, auto: true, archivedAt: `${dates[dates.length - 1]}T12:00:00` });
+      });
+      return next.length === h.length && next.every((e, i) => e === h[i]) ? h : next;
+    });
+  }, [payments, loaded]);
+
   const showSuccess = (msg) => {
     setSuccessMessage(msg);
     setTimeout(() => setSuccessMessage(''), 3000);
@@ -570,23 +589,6 @@ export default function App() {
     setNewCategoryName('');
   };
 
-  const archiveMonth = () => {
-    setConfirmModal({
-      title: 'Archiver le mois',
-      message: `Archiver ${formatMonth(currentData.month)} et passer au mois suivant ?`,
-      confirmLabel: 'Archiver',
-      onConfirm: () => {
-        setHistory((h) => [...h, { ...currentData, archivedAt: new Date().toISOString() }]);
-        const [year, month] = currentData.month.split('-');
-        const next = new Date(parseInt(year), parseInt(month)); // month is already 0-indexed after +1 — wraps correctly
-        const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
-        setCurrentData((d) => ({ ...d, month: nextStr }));
-        setConfirmModal(null);
-        showSuccess('Mois archivé avec succès !');
-      },
-    });
-  };
-
   const deleteArchive = (monthStr) => {
     setConfirmModal({
       title: 'Supprimer l\'archive',
@@ -666,12 +668,6 @@ export default function App() {
                   <Calendar size={14} className="inline mr-1" />
                   Historique
                 </button>
-                <button
-                  onClick={archiveMonth}
-                  className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-                >
-                  Archiver
-                </button>
               </>
             ) : (
               <button
@@ -695,7 +691,38 @@ export default function App() {
                 Aucun mois archivé pour l'instant.
               </div>
             )}
-            {[...history].reverse().map((entry) => {
+            {[...history].sort((a, b) => b.month.localeCompare(a.month)).map((entry) => {
+              if (entry.auto) {
+                const pm = payments[entry.month] || {};
+                const sum = (b, k) => pm[b]?.[k]?.amount || 0;
+                const totBank = (b) => sum(b, 'person1') + sum(b, 'person2');
+                return (
+                  <div key={entry.month} className="bg-white rounded-lg shadow-lg p-5">
+                    <h3 className="font-bold text-gray-800 text-lg">{formatMonth(entry.month)}</h3>
+                    <p className="text-xs text-gray-400 mb-2">
+                      Archivé automatiquement (tout est réglé) · {new Date(entry.archivedAt).toLocaleDateString('fr-FR')}
+                    </p>
+                    <p className="text-2xl font-bold text-gray-800">{fmt(totBank('ccf') + totBank('hello'))} € versés</p>
+                    <p className="text-xs text-gray-400 mb-3">
+                      CCF {fmt(totBank('ccf'))} € · HelloBank {fmt(totBank('hello'))} €
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {PERSONS.map((k) => (
+                        <div key={k} className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-sm font-semibold text-gray-700">{names[k]}</p>
+                          <p className="text-lg font-bold text-indigo-600">{fmt(sum('ccf', k) + sum('hello', k))} €</p>
+                          <p className="text-xs text-gray-400">
+                            CCF {fmt(sum('ccf', k))} ({fmtDate(pm.ccf?.[k]?.date)})
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Hello {fmt(sum('hello', k))} ({fmtDate(pm.hello?.[k]?.date)})
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
               const hb = helloAmountOf(entry);
               const tot = hb + entry.categories.reduce(
                 (s, c) => s + c.items.reduce((ss, it) => ss + (parseFloat(it.amount) || 0), 0),
