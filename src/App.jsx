@@ -757,7 +757,7 @@ export default function App() {
             {/* HelloBank */}
             <div className="bg-white rounded-lg shadow-lg p-5">
               <h3 className="text-lg font-bold text-gray-800">HelloBank</h3>
-              <p className="text-sm text-gray-400 mb-3">Dépenses courantes (en général 1000 à 1200 €)</p>
+              <p className="text-sm text-gray-400 mb-3">Dépenses courantes, réparties 50/50 (en général 1000 à 1200 €)</p>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
