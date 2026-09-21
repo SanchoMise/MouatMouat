@@ -703,7 +703,6 @@ export default function App() {
                       <h3 className="text-lg font-bold text-gray-800">{cat.name}</h3>
                       <p className="text-sm text-gray-400">{fmt(catTotal)} €</p>
                     </div>
-                    <SplitToggle value={cat.split || 'income'} onChange={(v) => setCategorySplit(cat.id, v)} />
                     <div className="flex gap-2">
                       <button
                         onClick={() => addItem(cat.id)}
@@ -752,6 +751,10 @@ export default function App() {
                       <p className="text-sm text-gray-300 text-center py-2">Aucune charge — cliquez + pour en ajouter</p>
                     )}
                   </div>
+                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                    <span className="text-sm text-gray-500">Répartition</span>
+                    <SplitToggle value={cat.split || 'income'} onChange={(v) => setCategorySplit(cat.id, v)} />
+                  </div>
                 </div>
               );
             })}
@@ -760,9 +763,6 @@ export default function App() {
             <div className="bg-white rounded-lg shadow-lg p-5">
               <h3 className="text-lg font-bold text-gray-800">HelloBank</h3>
               <p className="text-sm text-gray-400 mb-3">Dépenses courantes (en général 1000 à 1200 €)</p>
-              <div className="mb-3">
-                <SplitToggle value={currentData.helloBank?.split || 'equal'} onChange={setHelloSplit} />
-              </div>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -774,6 +774,10 @@ export default function App() {
                   className="w-32 border border-gray-200 rounded-lg px-3 py-1.5 text-right focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 />
                 <span className="text-gray-400">€</span>
+              </div>
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                <span className="text-sm text-gray-500">Répartition</span>
+                <SplitToggle value={currentData.helloBank?.split || 'equal'} onChange={setHelloSplit} />
               </div>
             </div>
 
