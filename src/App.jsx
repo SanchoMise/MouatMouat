@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Edit2, Save, Calendar, X, DollarSign } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, Calendar, X, Home, Wallet } from 'lucide-react';
 
 // À partir du 15, on travaille sur le mois suivant (prélèvement le 5 du mois suivant)
 const getActiveMonth = (now = new Date()) => {
@@ -310,7 +310,7 @@ export default function App() {
   const [currentData, setCurrentData] = useState(DEFAULT_DATA);
   const [history, setHistory] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [view, setView] = useState('current');
+  const [view, setView] = useState('home');
   const [editingIncome, setEditingIncome] = useState(false);
   const [confirmModal, setConfirmModal] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
@@ -504,30 +504,12 @@ export default function App() {
 
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-40">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-2 flex-wrap">
+        <div className="max-w-2xl mx-auto px-4 py-3">
           <h1 className="text-lg font-bold text-indigo-700">💰 Charges</h1>
-          <div className="flex gap-2 flex-wrap">
-            {view === 'current' ? (
-              <button
-                onClick={() => setView('history')}
-                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
-              >
-                <Calendar size={14} className="inline mr-1" />
-                Historique
-              </button>
-            ) : (
-              <button
-                onClick={() => setView('current')}
-                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
-              >
-                Mois actuel
-              </button>
-            )}
-          </div>
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-6 pb-10 space-y-4">
+      <main className="max-w-2xl mx-auto px-4 py-6 pb-28 space-y-4">
         {/* ── Vue historique ── */}
         {view === 'history' && (
           <div className="space-y-4">
@@ -598,8 +580,50 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Vue mois actuel ── */}
-        {view === 'current' && (
+        {/* ── Accueil ── */}
+        {view === 'home' && (
+          <>
+            {/* Versements du mois */}
+            <div className="bg-white rounded-lg shadow-lg p-5 text-center">
+              <p className="text-sm text-gray-500">Mois à payer</p>
+              <h2 className="text-2xl font-bold text-indigo-700">{formatMonth(currentData.month)}</h2>
+              <p className="text-xs text-gray-400 mb-3">Prélèvement le 5 · total {fmt(ccfTotal + helloTotal)} €</p>
+              <div className="grid grid-cols-2 gap-3">
+                {PERSONS.map((k) => (
+                  <div key={k} className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-sm font-semibold text-gray-700 truncate">{names[k]}</p>
+                    <p className="text-lg font-bold text-indigo-600">{fmt(ccfDues[k] + helloDues[k])} €</p>
+                    <p className="text-xs text-gray-400">CCF {fmt(ccfDues[k])} · Hello {fmt(helloDues[k])}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <PaymentCard
+              title="Charges communes — CCF"
+              subtitle="Prélèvement le 5"
+              total={ccfTotal}
+              dues={ccfDues}
+              names={names}
+              entries={payments[currentData.month]?.ccf}
+              onSet={(k, v) => setPayment(currentData.month, 'ccf', k, v)}
+              onClear={(k) => clearPayment(currentData.month, 'ccf', k)}
+            />
+            <PaymentCard
+              title="Dépenses courantes — HelloBank"
+              subtitle="Prélèvement le 5"
+              total={helloTotal}
+              dues={helloDues}
+              names={names}
+              entries={payments[currentData.month]?.hello}
+              onSet={(k, v) => setPayment(currentData.month, 'hello', k, v)}
+              onClear={(k) => clearPayment(currentData.month, 'hello', k)}
+            />
+
+          </>
+        )}
+
+        {/* ── Revenus / Charges ── */}
+        {view === 'settings' && (
           <>
             {/* Revenus */}
             <div className="bg-white rounded-lg shadow-lg p-5">
@@ -748,29 +772,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Versements du mois */}
-            <h2 className="text-lg font-bold text-gray-700 pt-2">Versements de {formatMonth(currentData.month)}</h2>
-            <PaymentCard
-              title="Charges communes — CCF"
-              subtitle="Prélèvement le 5"
-              total={ccfTotal}
-              dues={ccfDues}
-              names={names}
-              entries={payments[currentData.month]?.ccf}
-              onSet={(k, v) => setPayment(currentData.month, 'ccf', k, v)}
-              onClear={(k) => clearPayment(currentData.month, 'ccf', k)}
-            />
-            <PaymentCard
-              title="Dépenses courantes — HelloBank"
-              subtitle="Prélèvement le 5"
-              total={helloTotal}
-              dues={helloDues}
-              names={names}
-              entries={payments[currentData.month]?.hello}
-              onSet={(k, v) => setPayment(currentData.month, 'hello', k, v)}
-              onClear={(k) => clearPayment(currentData.month, 'hello', k)}
-            />
-
             {/* Ajouter une catégorie */}
             <div className="bg-white rounded-lg shadow-lg p-5">
               <h3 className="text-base font-semibold text-gray-600 mb-3">Ajouter une catégorie</h3>
@@ -794,6 +795,28 @@ export default function App() {
           </>
         )}
       </main>
+
+      {/* Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-40">
+        <div className="max-w-2xl mx-auto grid grid-cols-3">
+          {[
+            ['home', 'Accueil', Home],
+            ['settings', 'Revenus / Charges', Wallet],
+            ['history', 'Historique', Calendar],
+          ].map(([id, label, Icon]) => (
+            <button
+              key={id}
+              onClick={() => setView(id)}
+              className={`flex flex-col items-center gap-0.5 py-2.5 text-xs font-medium transition-colors ${
+                view === id ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <Icon size={22} />
+              {label}
+            </button>
+          ))}
+        </div>
+      </nav>
 
       {/* Modals */}
       {confirmModal && (
