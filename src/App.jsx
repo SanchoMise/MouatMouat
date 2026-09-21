@@ -29,7 +29,42 @@ const DEFAULT_DATA = {
   person1: { name: 'Personne 1', income: 0 },
   person2: { name: 'Personne 2', income: 0 },
   categories: DEFAULT_CATEGORIES,
+  helloBank: { amount: 1100 },
 };
+
+const DEFAULT_HELLO_AMOUNT = 1100;
+const helloAmountOf = (d) => parseFloat(d?.helloBank?.amount ?? DEFAULT_HELLO_AMOUNT) || 0;
+
+// Versements déjà effectués avant la mise en place du suivi (saisie manuelle)
+// Format : [mois, banque, [date Bertrand, montant], [date Cyrielle, montant]]
+const SEED_ROWS = [
+  ['2026-05', 'ccf', ['2026-04-30', 1400], ['2026-05-02', 1800]],
+  ['2026-06', 'ccf', ['2026-06-02', 1400], ['2026-05-27', 1800]],
+  ['2026-07', 'ccf', ['2026-07-03', 1540], ['2026-06-26', 1643]],
+  ['2026-08', 'ccf', ['2026-07-31', 1700], ['2026-07-29', 1500]],
+  ['2026-09', 'ccf', ['2026-09-02', 1500], ['2026-08-27', 1700]],
+  ['2026-05', 'hello', ['2026-04-28', 500], ['2026-05-02', 500]],
+  ['2026-06', 'hello', ['2026-06-02', 600], ['2026-05-27', 600]],
+  ['2026-07', 'hello', ['2026-07-03', 600], ['2026-06-26', 600]],
+  ['2026-08', 'hello', ['2026-07-31', 500], ['2026-07-29', 500]],
+  ['2026-09', 'hello', ['2026-09-02', 500], ['2026-08-27', 500]],
+];
+
+// bertrandKey / cyrielleKey : 'person1' | 'person2' selon les prénoms saisis dans l'app
+const buildSeedPayments = (bertrandKey, cyrielleKey) => {
+  const out = {};
+  SEED_ROWS.forEach(([month, bank, [bd, ba], [cd, ca]]) => {
+    out[month] = out[month] || {};
+    out[month][bank] = {
+      [bertrandKey]: { date: bd, amount: ba },
+      [cyrielleKey]: { date: cd, amount: ca },
+    };
+  });
+  return out;
+};
+
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const fmtDate = (d) => (d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR') : '');
 
 const formatMonth = (monthStr) => {
   const [year, month] = monthStr.split('-');
@@ -88,6 +123,168 @@ function ConfirmModal({ title, message, onConfirm, onCancel, confirmLabel = 'Con
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Suivi des versements ────────────────────────────────────────────────────
+function PersonPayment({ name, due, payment, onSet, onClear }) {
+  const [amount, setAmount] = useState(String(Math.round(due * 100) / 100));
+  const [date, setDate] = useState(todayStr());
+
+  useEffect(() => { setAmount(String(Math.round(due * 100) / 100)); }, [due]);
+
+  if (payment) {
+    return (
+      <div className="border border-emerald-200 bg-emerald-50 rounded-lg p-3">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-semibold text-gray-700">{name}</p>
+          <span className="text-xs font-medium text-emerald-700">✓ Réglé</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            value={payment.amount}
+            onChange={(e) => onSet({ ...payment, amount: parseFloat(e.target.value) || 0 })}
+            step="0.01"
+            className="w-24 border border-emerald-200 rounded-lg px-2 py-1 text-right text-sm bg-white"
+          />
+          <span className="text-gray-400 text-sm">€</span>
+          <input
+            type="date"
+            value={payment.date}
+            onChange={(e) => onSet({ ...payment, date: e.target.value })}
+            className="flex-1 min-w-0 border border-emerald-200 rounded-lg px-2 py-1 text-sm bg-white"
+          />
+          <button onClick={onClear} className="text-red-400 hover:text-red-600" title="Annuler ce versement">
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-semibold text-gray-700">{name}</p>
+        <span className="text-xs text-gray-400">à verser : {fmt(due)} €</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          step="0.01"
+          className="w-24 border border-gray-300 rounded-lg px-2 py-1 text-right text-sm"
+        />
+        <span className="text-gray-400 text-sm">€</span>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="flex-1 min-w-0 border border-gray-300 rounded-lg px-2 py-1 text-sm"
+        />
+      </div>
+      <button
+        onClick={() => onSet({ amount: parseFloat(amount) || 0, date: date || todayStr() })}
+        className="mt-2 w-full py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+      >
+        Charges réglées
+      </button>
+    </div>
+  );
+}
+
+function PaymentCard({ title, subtitle, total, dues, names, entries, onSet, onClear }) {
+  const paidTotal = ['person1', 'person2'].reduce((s, k) => s + (entries?.[k]?.amount || 0), 0);
+  const allPaid = entries?.person1 && entries?.person2;
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-5">
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <h3 className="text-lg font-bold text-gray-800">{title}</h3>
+          <p className="text-sm text-gray-400">{subtitle}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-lg font-bold text-gray-800">{fmt(total)} €</p>
+          <p className={`text-xs font-medium ${allPaid ? 'text-emerald-600' : 'text-gray-400'}`}>
+            Versé : {fmt(paidTotal)} €
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {['person1', 'person2'].map((k) => (
+          <PersonPayment
+            key={k}
+            name={names[k]}
+            due={dues[k]}
+            payment={entries?.[k]}
+            onSet={(v) => onSet(k, v)}
+            onClear={() => onClear(k)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PaymentsHistory({ payments, names, onSet, onClear }) {
+  const months = Object.keys(payments).sort().reverse();
+  if (months.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6 text-center text-gray-400">Aucun versement enregistré.</div>
+    );
+  }
+  return (
+    <div className="space-y-4">
+      {months.map((m) => (
+        <div key={m} className="bg-white rounded-lg shadow-lg p-5">
+          <h3 className="font-bold text-gray-800 text-lg mb-3">{formatMonth(m)}</h3>
+          {[['ccf', 'CCF'], ['hello', 'HelloBank']].map(([bank, label]) => {
+            const e = payments[m]?.[bank];
+            const tot = (e?.person1?.amount || 0) + (e?.person2?.amount || 0);
+            return (
+              <div key={bank} className="mb-3 last:mb-0">
+                <div className="flex justify-between text-sm font-semibold text-gray-600 mb-1">
+                  <span>{label}</span>
+                  <span>{fmt(tot)} €</span>
+                </div>
+                <div className="space-y-1">
+                  {['person1', 'person2'].map((k) => (
+                    <div key={k} className="flex items-center gap-2 text-sm">
+                      <span className="w-24 truncate text-gray-600">{names[k]}</span>
+                      {e?.[k] ? (
+                        <>
+                          <input
+                            type="number"
+                            value={e[k].amount}
+                            onChange={(ev) => onSet(m, bank, k, { ...e[k], amount: parseFloat(ev.target.value) || 0 })}
+                            step="0.01"
+                            className="w-24 border border-gray-200 rounded px-2 py-0.5 text-right"
+                          />
+                          <span className="text-gray-400">€</span>
+                          <input
+                            type="date"
+                            value={e[k].date}
+                            onChange={(ev) => onSet(m, bank, k, { ...e[k], date: ev.target.value })}
+                            className="border border-gray-200 rounded px-2 py-0.5"
+                          />
+                          <button onClick={() => onClear(m, bank, k)} className="text-red-300 hover:text-red-500">
+                            <X size={14} />
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-gray-300">non réglé</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -233,16 +430,25 @@ export default function App() {
   const [successMessage, setSuccessMessage] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
   const [splitMode, setSplitMode] = useState('income'); // 'income' | 'equal'
+  const [payments, setPayments] = useState({}); // { 'YYYY-MM': { ccf|hello: { person1|person2: {amount, date} } } }
 
   // Chargement initial
   useEffect(() => {
     (async () => {
-      const [cur, hist, exc] = await Promise.all([
+      const [cur, hist, exc, pay] = await Promise.all([
         loadData('expenses-current'),
         loadData('expenses-history'),
         loadData('expenses-exceptional'),
+        loadData('expenses-payments'),
       ]);
-      if (cur) setCurrentData(cur);
+      if (cur) setCurrentData({ ...cur, helloBank: cur.helloBank || { amount: DEFAULT_HELLO_AMOUNT } });
+      if (pay) {
+        setPayments(pay);
+      } else {
+        // Première ouverture : pré-remplissage des versements de mai à septembre 2026
+        const p2IsBertrand = /bertrand/i.test(cur?.person2?.name || '') && !/bertrand/i.test(cur?.person1?.name || '');
+        setPayments(p2IsBertrand ? buildSeedPayments('person2', 'person1') : buildSeedPayments('person1', 'person2'));
+      }
       if (hist) setHistory(hist);
       if (exc) setExceptionalHistory(exc);
       setLoaded(true);
@@ -253,6 +459,7 @@ export default function App() {
   useEffect(() => { if (loaded) saveData('expenses-current', currentData); }, [currentData, loaded]);
   useEffect(() => { if (loaded) saveData('expenses-history', history); }, [history, loaded]);
   useEffect(() => { if (loaded) saveData('expenses-exceptional', exceptionalHistory); }, [exceptionalHistory, loaded]);
+  useEffect(() => { if (loaded) saveData('expenses-payments', payments); }, [payments, loaded]);
 
   const showSuccess = (msg) => {
     setSuccessMessage(msg);
@@ -260,16 +467,20 @@ export default function App() {
   };
 
   // ── Calculs ──
-  const totalExpenses = currentData.categories.reduce(
+  const ccfTotal = currentData.categories.reduce(
     (sum, cat) => sum + cat.items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0),
     0
   );
+  const helloTotal = helloAmountOf(currentData);
+  const totalExpenses = ccfTotal + helloTotal;
   const totalIncome = (parseFloat(currentData.person1.income) || 0) + (parseFloat(currentData.person2.income) || 0);
   const p1PctIncome = totalIncome > 0 ? ((parseFloat(currentData.person1.income) || 0) / totalIncome) * 100 : 50;
   const p1Pct = splitMode === 'equal' ? 50 : p1PctIncome;
   const p2Pct = 100 - p1Pct;
-  const p1Share = (totalExpenses * p1Pct) / 100;
-  const p2Share = (totalExpenses * p2Pct) / 100;
+  const ccfDues = { person1: (ccfTotal * p1Pct) / 100, person2: (ccfTotal * p2Pct) / 100 };
+  const helloDues = { person1: (helloTotal * p1Pct) / 100, person2: (helloTotal * p2Pct) / 100 };
+  const p1Share = ccfDues.person1 + helloDues.person1;
+  const p2Share = ccfDues.person2 + helloDues.person2;
   const p1Remaining = (parseFloat(currentData.person1.income) || 0) - p1Share;
   const p2Remaining = (parseFloat(currentData.person2.income) || 0) - p2Share;
 
@@ -376,6 +587,27 @@ export default function App() {
     });
   };
 
+  const updateHelloAmount = (value) => {
+    setCurrentData((d) => ({ ...d, helloBank: { ...(d.helloBank || {}), amount: parseFloat(value) || 0 } }));
+  };
+
+  const setPayment = (month, bank, person, value) => {
+    setPayments((p) => ({
+      ...p,
+      [month]: { ...p[month], [bank]: { ...p[month]?.[bank], [person]: value } },
+    }));
+  };
+
+  const clearPayment = (month, bank, person) => {
+    setPayments((p) => {
+      const bankEntries = { ...p[month]?.[bank] };
+      delete bankEntries[person];
+      return { ...p, [month]: { ...p[month], [bank]: bankEntries } };
+    });
+  };
+
+  const names = { person1: currentData.person1.name, person2: currentData.person2.name };
+
   const addExceptional = (item) => {
     setExceptionalHistory((h) => [...h, item]);
     showSuccess('Charge exceptionnelle enregistrée !');
@@ -408,6 +640,12 @@ export default function App() {
             </button>
             {view === 'current' ? (
               <>
+                <button
+                  onClick={() => setView('payments')}
+                  className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
+                >
+                  Versements
+                </button>
                 <button
                   onClick={() => setView('history')}
                   className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
@@ -445,7 +683,8 @@ export default function App() {
               </div>
             )}
             {[...history].reverse().map((entry) => {
-              const tot = entry.categories.reduce(
+              const hb = helloAmountOf(entry);
+              const tot = hb + entry.categories.reduce(
                 (s, c) => s + c.items.reduce((ss, it) => ss + (parseFloat(it.amount) || 0), 0),
                 0
               );
@@ -470,7 +709,8 @@ export default function App() {
                       <Trash2 size={18} />
                     </button>
                   </div>
-                  <p className="text-2xl font-bold text-gray-800 mb-3">{fmt(tot)} € total</p>
+                  <p className="text-2xl font-bold text-gray-800">{fmt(tot)} € total</p>
+                  <p className="text-xs text-gray-400 mb-3">dont HelloBank {fmt(hb)} €</p>
                   <div className="grid grid-cols-2 gap-3">
                     {[
                       { name: entry.person1.name, share: s1, pct: pc1 },
@@ -486,6 +726,14 @@ export default function App() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* ── Vue versements ── */}
+        {view === 'payments' && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-gray-700">Versements</h2>
+            <PaymentsHistory payments={payments} names={names} onSet={setPayment} onClear={clearPayment} />
           </div>
         )}
 
@@ -609,6 +857,47 @@ export default function App() {
               );
             })}
 
+            {/* HelloBank */}
+            <div className="bg-white rounded-lg shadow-lg p-5">
+              <h3 className="text-lg font-bold text-gray-800">HelloBank</h3>
+              <p className="text-sm text-gray-400 mb-3">Dépenses courantes (en général 1000 à 1200 €)</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={currentData.helloBank?.amount || ''}
+                  onChange={(e) => updateHelloAmount(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  step="10"
+                  className="w-32 border border-gray-200 rounded-lg px-3 py-1.5 text-right focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+                <span className="text-gray-400">€</span>
+              </div>
+            </div>
+
+            {/* Versements du mois */}
+            <h2 className="text-lg font-bold text-gray-700 pt-2">Versements de {formatMonth(currentData.month)}</h2>
+            <PaymentCard
+              title="Charges communes — CCF"
+              subtitle="Prélèvement le 5"
+              total={ccfTotal}
+              dues={ccfDues}
+              names={names}
+              entries={payments[currentData.month]?.ccf}
+              onSet={(k, v) => setPayment(currentData.month, 'ccf', k, v)}
+              onClear={(k) => clearPayment(currentData.month, 'ccf', k)}
+            />
+            <PaymentCard
+              title="Dépenses courantes — HelloBank"
+              subtitle="Prélèvement le 5"
+              total={helloTotal}
+              dues={helloDues}
+              names={names}
+              entries={payments[currentData.month]?.hello}
+              onSet={(k, v) => setPayment(currentData.month, 'hello', k, v)}
+              onClear={(k) => clearPayment(currentData.month, 'hello', k)}
+            />
+
             {/* Ajouter une catégorie */}
             <div className="bg-white rounded-lg shadow-lg p-5">
               <h3 className="text-base font-semibold text-gray-600 mb-3">Ajouter une catégorie</h3>
@@ -639,7 +928,7 @@ export default function App() {
           <div className="max-w-2xl mx-auto px-4 py-4 grid grid-cols-3 gap-2">
             {/* Total charges */}
             <div className="text-center">
-              <p className="text-xs text-gray-500 font-medium">Total charges</p>
+              <p className="text-xs text-gray-500 font-medium">CCF {fmt(ccfTotal)} + Hello {fmt(helloTotal)}</p>
               <p className="text-2xl font-bold text-gray-800">{fmt(totalExpenses)} €</p>
               <button
                 onClick={() => setSplitMode((m) => m === 'income' ? 'equal' : 'income')}
@@ -656,14 +945,14 @@ export default function App() {
             <div className="text-center border-l border-r border-gray-100 px-2">
               <p className="text-xs text-gray-500 font-medium truncate">{currentData.person1.name}</p>
               <p className="text-lg font-bold text-indigo-600">{fmt(p1Share)} €</p>
-              <p className="text-xs text-gray-400">{fmt(p1Pct)}%</p>
+              <p className="text-xs text-gray-400">{fmt(p1Pct)}% · CCF {fmt(ccfDues.person1)} · Hello {fmt(helloDues.person1)}</p>
               <p className="text-sm font-semibold text-emerald-600">Restant : {fmt(p1Remaining)} €</p>
             </div>
             {/* Personne 2 */}
             <div className="text-center">
               <p className="text-xs text-gray-500 font-medium truncate">{currentData.person2.name}</p>
               <p className="text-lg font-bold text-indigo-600">{fmt(p2Share)} €</p>
-              <p className="text-xs text-gray-400">{fmt(p2Pct)}%</p>
+              <p className="text-xs text-gray-400">{fmt(p2Pct)}% · CCF {fmt(ccfDues.person2)} · Hello {fmt(helloDues.person2)}</p>
               <p className="text-sm font-semibold text-emerald-600">Restant : {fmt(p2Remaining)} €</p>
             </div>
           </div>
