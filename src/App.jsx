@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Calendar, X, Home, Wallet } from 'lucide-react';
+import { Plus, Trash2, Calendar, X, Home, Wallet, RefreshCw } from 'lucide-react';
 
 // À partir du 15, on travaille sur le mois suivant (prélèvement le 5 du mois suivant)
 const getActiveMonth = (now = new Date()) => {
@@ -363,6 +363,29 @@ export default function App() {
     })();
   }, []);
 
+  // Actualiser : recharge les dernières données enregistrées (modifs de l'autre personne)
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    setRefreshing(true);
+    const [cur, hist, pay] = await Promise.all([
+      loadData('expenses-current'),
+      loadData('expenses-history'),
+      loadData('expenses-payments'),
+    ]);
+    if (cur) {
+      const active = getActiveMonth();
+      setCurrentData({
+        ...cur,
+        month: cur.month < active ? active : cur.month,
+        helloBank: cur.helloBank || { amount: DEFAULT_HELLO_AMOUNT },
+      });
+    }
+    if (pay) setPayments(pay);
+    if (hist) setHistory(hist);
+    setRefreshing(false);
+    showSuccess('Données actualisées');
+  };
+
   // Sauvegarde automatique
   useEffect(() => { if (loaded) saveData('expenses-current', currentData); }, [currentData, loaded]);
   useEffect(() => { if (loaded) saveData('expenses-history', history); }, [history, loaded]);
@@ -612,6 +635,15 @@ export default function App() {
         {/* ── Accueil ── */}
         {view === 'home' && (
           <>
+            <button
+              onClick={refresh}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 mx-auto text-sm text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+              Actualiser
+            </button>
+
             {/* Versements du mois */}
             <div className="bg-white rounded-lg shadow-lg p-5 text-center">
               <p className="text-sm text-gray-500">Mois à payer</p>
